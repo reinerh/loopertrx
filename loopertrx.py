@@ -16,7 +16,7 @@ COMMAND_SIZE = 0xfe
 COMMAND_DATA = 0xff
 
 def mass_storage_header(data_len, cdb_len):
-    header = bytes([ord('U'), ord('S'), ord('B'), ord('C')])
+    header = "USBC".encode('ascii')
     tag = random.randint(0, 1<<32 - 1)
     flags = 0x80
     target = 0x00
@@ -58,8 +58,22 @@ def send_data(dev, data):
 def send_stop(dev):
     header = command_header(COMMAND_SIZE, 5, 0x00, 0x00)
 
-def write_wav_header(outfile):
-    pass
+def write_wav_header(outfile, data_size):
+    header_size = 44
+    header = "RIFF".encode('ascii')
+    header += struct.pack('<i', data_size + header_size - 8)
+    header += "WAVE".encode('ascii')
+    header += "fmt ".encode('ascii')
+    fmt = 0x01 # PCM
+    nchan = 1
+    rate = 48000
+    fsize = 3
+    bps = rate * fsize
+    bits = 24
+    header += struct.pack('<ihhiihh', 16, fmt, nchan, rate, bps, fsize, bits)
+    header += "data".encode('ascii')
+    header += struct.pack('<i', data_size)
+    outfile.write(header)
 
 dev = usb.core.find(idVendor=LOOPER_VID, idProduct=LOOPER_PID)
 if not dev:
@@ -75,7 +89,7 @@ if size == 0:
     sys.exit(0)
 
 with open("/tmp/dump.wav", 'wb') as outfile:
-    write_wav_header(outfile)
+    write_wav_header(outfile, size)
     print("Receiving ", end='', flush=True)
     while size > 0:
         bufsize = (size >= 65536) and 65536 or size
