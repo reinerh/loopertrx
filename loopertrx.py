@@ -21,6 +21,16 @@ import argparse
 import usb.core
 import usb.util
 
+try:
+    from tkinter import *
+    from tkinter import messagebox
+    from tkinter import filedialog
+    from tkinter.ttk import *
+    use_gui = True
+except ImportError:
+    use_gui = False
+
+PROG_NAME = "LooperTRX"
 
 class USBLooper():
     VID = 0x0483
@@ -32,7 +42,8 @@ class USBLooper():
     COMMAND_SIZE = 0xfe
     COMMAND_DATA = 0xff
 
-    def __init__(self):
+    def __init__(self, ui):
+        self.ui = ui
         self.dev = usb.core.find(idVendor=self.VID, idProduct=self.PID)
         if not self.dev:
             raise FileNotFoundError("Device not found.")
@@ -110,22 +121,21 @@ class USBLooper():
     def receive_file(self, filename):
         size = self.get_size()
         if size == 0:
-            print("No data available.")
-            sys.exit(0)
+            self.ui.alert("No data available.")
 
         with open(filename, 'wb') as outfile:
             self.write_wav_header(outfile, size)
-            print("Receiving ", end='', flush=True)
+            self.ui.init_progress(size, "Receiving")
             while size > 0:
                 bufsize = (size >= 65536) and 65536 or size
                 # data needs to be transferred in multiples of 1k blocks
                 padding = (1024 - (bufsize % 1024)) % 1024
 
                 buf = self.get_data(bufsize + padding)
-                print('.', end='', flush=True),
+                self.ui.update_progress(bufsize)
                 outfile.write(buf[:bufsize])
                 size -= bufsize
-            print(" Done.")
+            self.ui.end_progress()
 
     def transmit_file(self, filename):
         with open(filename, 'rb') as infile:
@@ -134,35 +144,116 @@ class USBLooper():
             # skip first 44 bytes for now; we assume valid file. TODO: validate
             content = content[44:]
             content_size = len(content)
-            print("Transmitting ", end='', flush=True)
+            self.ui.init_progress(content_size, "Transmitting")
             while len(content) > 0:
                 buf = content[:65536]
                 padsize = (1024 - (len(buf) % 1024)) % 1024
                 buf += b'\x00' * padsize
 
                 self.send_data(buf, tag)
-                print('.', end='', flush=True),
+                self.ui.update_progress(len(buf))
                 content = content[65536:]
             self.submit_data_len(content_size, tag)
-            print(" Done.")
+            self.ui.end_progress()
+
+
+class Gui(Frame):
+    def __init__(self, root=None):
+        super().__init__(root)
+        root.geometry("400x300")
+        self.pack(fill=BOTH, expand=1)
+        self.create_widgets()
+
+    def set_device(self, dev):
+        self.dev = dev
+
+    def alert(self, msg):
+        messagebox.showwarning(PROG_NAME, msg)
+
+    def create_widgets(self):
+        self.label = Label(self, text=PROG_NAME)
+        self.label.pack(expand=1)
+
+        self.dl_button = Button(self, text="Download", command=self.download)
+        self.dl_button.pack(fill=BOTH, expand=1, padx=10, pady=5)
+
+        self.ul_button = Button(self, text="Upload", command=self.upload)
+        self.ul_button.pack(fill=BOTH, expand=1, padx=10, pady=5)
+
+        self.progress = Progressbar(self)
+        self.progress.pack(fill=BOTH)
+
+    def download(self):
+        fname = filedialog.asksaveasfilename(filetypes=[('WAVE audio', '.wav')], defaultextension='.wav')
+        if fname:
+            self.dev.receive_file(fname)
+
+    def upload(self):
+        fname = filedialog.askopenfilename(filetypes=[('WAVE audio', '.wav')], defaultextension='.wav')
+        if fname:
+            self.dev.transmit_file(fname)
+
+    def init_progress(self, max_amount, msg=None):
+        self.progress['maximum'] = max_amount
+
+    def update_progress(self, amount):
+        self.progress.step(amount)
+        self.update()
+
+    def end_progress(self):
+        self.update_idletasks()
+        messagebox.showinfo(PROG_NAME, "Transfer finished")
+
+
+class Cli():
+    def set_device(self, dev):
+        pass
+
+    def alert(self, msg):
+        print(msg)
+
+    def init_progress(self, max_amount, msg):
+        print(msg, end='', flush=True)
+
+    def update_progress(self, amount):
+        print('.', end='', flush=True),
+
+    def end_progress(self):
+        print(" Done.")
 
 
 def main():
-    argp = argparse.ArgumentParser()
-    argp.add_argument('action', choices=['rx', 'tx'])
-    argp.add_argument('filename')
-    args = argp.parse_args()
+    global use_gui
+
+    if not use_gui or len(sys.argv) > 1:
+        use_gui = False
+        argp = argparse.ArgumentParser(epilog="Call without parameters to start GUI (if tkinter is available)")
+        argp.add_argument('action', choices=['rx', 'tx'], help="whether to send or receive audio data")
+        argp.add_argument('filename', help="the input/output file")
+        args = argp.parse_args()
+
+    if use_gui:
+        root = Tk()
+        root.withdraw()
+        ui = Gui(root)
+    else:
+        ui = Cli()
 
     try:
-        dev = USBLooper()
+        dev = USBLooper(ui)
     except FileNotFoundError as e:
-        print(e)
+        ui.alert(e)
         sys.exit(1)
 
-    if args.action == 'rx':
-        dev.receive_file(args.filename)
-    elif args.action == 'tx':
-        dev.transmit_file(args.filename)
+    if use_gui:
+        root.deiconify()
+        ui.set_device(dev)
+        ui.mainloop()
+    else:
+        if args.action == 'rx':
+            dev.receive_file(args.filename)
+        elif args.action == 'tx':
+            dev.transmit_file(args.filename)
 
 
 if __name__ == "__main__":
