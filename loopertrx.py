@@ -21,19 +21,19 @@ import argparse
 import usb.core
 import usb.util
 
-LOOPER_VID = 0x0483
-LOOPER_PID = 0x572a
-
-ENDPOINT_IN  = 0x81
-ENDPOINT_OUT = 0x01
-
-COMMAND_SIZE = 0xfe
-COMMAND_DATA = 0xff
-
 
 class USBLooper():
+    VID = 0x0483
+    PID = 0x572a
+
+    ENDPOINT_IN  = 0x81
+    ENDPOINT_OUT = 0x01
+
+    COMMAND_SIZE = 0xfe
+    COMMAND_DATA = 0xff
+
     def __init__(self):
-        self.dev = usb.core.find(idVendor=LOOPER_VID, idProduct=LOOPER_PID)
+        self.dev = usb.core.find(idVendor=self.VID, idProduct=self.PID)
         if not self.dev:
             raise FileNotFoundError("Device not found.")
         if self.dev.is_kernel_driver_active(0):
@@ -59,35 +59,35 @@ class USBLooper():
         return header
 
     def ack_data(self):
-        self.dev.read(ENDPOINT_IN, 32)
+        self.dev.read(self.ENDPOINT_IN, 32)
 
     def get_size(self):
-        header = self.command_header(COMMAND_SIZE, 5, 0x00, 0x01)
-        self.dev.write(ENDPOINT_OUT, header)
-        length = self.dev.read(ENDPOINT_IN, 100)
+        header = self.command_header(self.COMMAND_SIZE, 5, 0x00, 0x01)
+        self.dev.write(self.ENDPOINT_OUT, header)
+        length = self.dev.read(self.ENDPOINT_IN, 100)
         self.ack_data()
         if length[0] == 1:
             return 0
         return length[1] + (length[2] << 8) + (length[3] << 16) + (length[4] << 24)
 
     def submit_data_len(self, size, tag=None):
-        header = self.command_header(COMMAND_SIZE, 5, 0x00, 0x00, tag)
+        header = self.command_header(self.COMMAND_SIZE, 5, 0x00, 0x00, tag)
         data_size = struct.pack('<bi', 0x00, size)
-        self.dev.write(ENDPOINT_OUT, header)
-        self.dev.write(ENDPOINT_OUT, data_size)
+        self.dev.write(self.ENDPOINT_OUT, header)
+        self.dev.write(self.ENDPOINT_OUT, data_size)
         self.ack_data()
 
     def get_data(self, nbytes):
-        header = self.command_header(COMMAND_DATA, nbytes, 0x01, 0x01)
-        self.dev.write(ENDPOINT_OUT, header)
-        buf = self.dev.read(ENDPOINT_IN, nbytes)
+        header = self.command_header(self.COMMAND_DATA, nbytes, 0x01, 0x01)
+        self.dev.write(self.ENDPOINT_OUT, header)
+        buf = self.dev.read(self.ENDPOINT_IN, nbytes)
         self.ack_data()
         return buf
 
     def send_data(self, data, tag=None):
-        header = self.command_header(COMMAND_DATA, len(data), 0x01, 0x00, tag)
-        self.dev.write(ENDPOINT_OUT, header)
-        self.dev.write(ENDPOINT_OUT, data)
+        header = self.command_header(self.COMMAND_DATA, len(data), 0x01, 0x00, tag)
+        self.dev.write(self.ENDPOINT_OUT, header)
+        self.dev.write(self.ENDPOINT_OUT, data)
         self.ack_data()
 
     def write_wav_header(self, outfile, data_size):
