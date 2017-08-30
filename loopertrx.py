@@ -123,38 +123,51 @@ class USBLooper():
         if size == 0:
             self.ui.alert("No data available.")
 
-        with open(filename, 'wb') as outfile:
-            self.write_wav_header(outfile, size)
-            self.ui.init_progress(size, "Receiving")
-            while size > 0:
-                bufsize = (size >= 65536) and 65536 or size
-                # data needs to be transferred in multiples of 1k blocks
-                padding = (1024 - (bufsize % 1024)) % 1024
+        try:
+            outfile = open(filename, 'wb')
+        except PermissionError as e:
+            self.ui.alert(e)
+            return
 
-                buf = self.get_data(bufsize + padding)
-                self.ui.update_progress(bufsize)
-                outfile.write(buf[:bufsize])
-                size -= bufsize
-            self.ui.end_progress()
+        self.write_wav_header(outfile, size)
+        self.ui.init_progress(size, "Receiving")
+        while size > 0:
+            bufsize = (size >= 65536) and 65536 or size
+            # data needs to be transferred in multiples of 1k blocks
+            padding = (1024 - (bufsize % 1024)) % 1024
+
+            buf = self.get_data(bufsize + padding)
+            self.ui.update_progress(bufsize)
+            outfile.write(buf[:bufsize])
+            size -= bufsize
+        outfile.close()
+        self.ui.end_progress()
 
     def transmit_file(self, filename):
-        with open(filename, 'rb') as infile:
-            content = infile.read()
-            tag = self.random_tag()
-            # skip first 44 bytes for now; we assume valid file. TODO: validate
-            content = content[44:]
-            content_size = len(content)
-            self.ui.init_progress(content_size, "Transmitting")
-            while len(content) > 0:
-                buf = content[:65536]
-                padsize = (1024 - (len(buf) % 1024)) % 1024
-                buf += b'\x00' * padsize
+        try:
+            infile = open(filename, 'rb')
+        except PermissionError as e:
+            self.ui.alert(e)
+            return
 
-                self.send_data(buf, tag)
-                self.ui.update_progress(len(buf))
-                content = content[65536:]
-            self.submit_data_len(content_size, tag)
-            self.ui.end_progress()
+        content = infile.read()
+        infile.close()
+        tag = self.random_tag()
+        # skip first 44 bytes for now; we assume valid file. TODO: validate
+        content = content[44:]
+        content_size = len(content)
+
+        self.ui.init_progress(content_size, "Transmitting")
+        while len(content) > 0:
+            buf = content[:65536]
+            padsize = (1024 - (len(buf) % 1024)) % 1024
+            buf += b'\x00' * padsize
+
+            self.send_data(buf, tag)
+            self.ui.update_progress(len(buf))
+            content = content[65536:]
+        self.submit_data_len(content_size, tag)
+        self.ui.end_progress()
 
 
 class Gui(Frame):
@@ -185,13 +198,23 @@ class Gui(Frame):
 
     def download(self):
         fname = filedialog.asksaveasfilename(filetypes=[('WAVE audio', '.wav')], defaultextension='.wav')
-        if fname:
+        if not fname:
+            return
+
+        try:
             self.dev.receive_file(fname)
+        except usb.core.USBError as e:
+            self.alert(e)
 
     def upload(self):
         fname = filedialog.askopenfilename(filetypes=[('WAVE audio', '.wav')], defaultextension='.wav')
-        if fname:
+        if not fname:
+            return
+
+        try:
             self.dev.transmit_file(fname)
+        except usb.core.USBError as e:
+            self.alert(e)
 
     def init_progress(self, max_amount, msg=None):
         self.progress['maximum'] = max_amount
@@ -241,7 +264,7 @@ def main():
 
     try:
         dev = USBLooper(ui)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, usb.core.USBError) as e:
         ui.alert(e)
         sys.exit(1)
 
@@ -250,10 +273,13 @@ def main():
         ui.set_device(dev)
         ui.mainloop()
     else:
-        if args.action == 'rx':
-            dev.receive_file(args.filename)
-        elif args.action == 'tx':
-            dev.transmit_file(args.filename)
+        try:
+            if args.action == 'rx':
+                dev.receive_file(args.filename)
+            elif args.action == 'tx':
+                dev.transmit_file(args.filename)
+        except usb.core.USBError as e:
+            ui.alert(e)
 
 
 if __name__ == "__main__":
