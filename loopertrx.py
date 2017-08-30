@@ -107,13 +107,13 @@ def init_device():
     dev.set_configuration()
     return dev
 
-def receive_file(dev):
+def receive_file(dev, filename):
     size = get_size(dev)
     if size == 0:
         print("No data available.")
         sys.exit(0)
 
-    with open("/tmp/dump.wav", 'wb') as outfile:
+    with open(filename, 'wb') as outfile:
         write_wav_header(outfile, size)
         print("Receiving ", end='', flush=True)
         while size > 0:
@@ -127,8 +127,8 @@ def receive_file(dev):
             size -= bufsize
         print(" Done.")
 
-def transmit_file(dev):
-    with open("/tmp/dump.wav", 'rb') as infile:
+def transmit_file(dev, filename):
+    with open(filename, 'rb') as infile:
         content = infile.read()
         tag = random_tag()
         # skip first 44 bytes for now; we assume valid file. TODO: validate
@@ -149,12 +149,13 @@ def transmit_file(dev):
 def main():
     argp = argparse.ArgumentParser()
     argp.add_argument('action', choices=['rx', 'tx'])
+    argp.add_argument('filename')
     args = argp.parse_args()
     dev = init_device()
     if args.action == 'rx':
-        receive_file(dev)
+        receive_file(dev, args.filename)
     elif args.action == 'tx':
-        transmit_file(dev)
+        transmit_file(dev, args.filename)
 
 if __name__ == "__main__":
     main()
