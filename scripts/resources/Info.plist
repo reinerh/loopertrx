@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>English</string>
+    <key>CFBundleGetInfoString</key>
+    <string>Ammoon AP-09 Nano Looper</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.ammoon.looper</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Ammoon AP-09 Nano Looper</string>
+    <key>CFBundlePackageType</key>
+    <string>KEXT</string>
+    <key>CFBundleSignature</key>
+    <string>not-signed</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>Device Driver</key>
+        <dict>
+            <key>CFBundleIdentifier</key>
+            <string>com.apple.iokit.IOUSBMassStorageDriver</string>
+            <key>IOClass</key>
+            <string>IOService</string>
+            <key>IOProviderClass</key>
+            <string>IOUSBInterface</string>
+            <key>idProduct</key>
+            <integer>22314</integer>
+            <key>idVendor</key>
+            <integer>1155</integer>
+            <key>bConfigurationValue</key>
+            <integer>1</integer>
+            <key>bInterfaceNumber</key>
+            <integer>0</integer>
+        </dict>
+    </dict>
+    <key>OSBundleRequired</key>
+    <string>Local-Root</string>
+</dict>
+</plist>
